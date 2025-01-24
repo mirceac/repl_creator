@@ -1,0 +1,12 @@
+{
+  "run": "python main.py",
+  "language": "python",
+  "entrypoint": "main.py",
+  "onBoot": "",
+  "packager": {
+    "language": "python",
+    "ignoredPaths": [
+      ".git"
+    ]
+  }
+}

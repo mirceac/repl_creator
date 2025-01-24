@@ -1,0 +1,12 @@
+{
+  "run": "node index.js",
+  "language": "nodejs",
+  "entrypoint": "index.js",
+  "onBoot": "",
+  "packager": {
+    "language": "nodejs",
+    "ignoredPaths": [
+      ".git"
+    ]
+  }
+}
