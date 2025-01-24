@@ -1,23 +1,11 @@
 # Replit Repl Creator
 
-A command-line tool to create new Repls and execute agent commands via the Replit API.
+A command-line tool to create new Repls using your Replit account credentials.
 
 ## Prerequisites
 
 - Python 3.6 or higher
-- Replit API token (see "Getting Your API Token" section below)
-
-## Getting Your API Token
-
-1. Log in to your Replit account
-2. Go to https://replit.com/account#tokens
-3. Click on "Generate new token"
-4. Give your token a name (e.g., "Repl Creator")
-5. Copy the token for use with this script
-
-You can provide your API token in one of two ways:
-1. Set it as an environment variable: `export REPLIT_API_TOKEN=your_token_here`
-2. Pass it directly using the `--token` argument when running the script
+- Replit account
 
 ## Usage
 
@@ -27,18 +15,13 @@ You can provide your API token in one of two ways:
 python create_repl.py --title "My New Repl" --language python --private
 ```
 
-### Executing a Single Agent Command
+When you run the script, it will prompt you for:
+1. Your Replit username
+2. Your Replit password (entered securely)
 
+Alternatively, you can provide credentials via command-line arguments (not recommended for security):
 ```bash
-python create_repl.py --agent-command "Create a simple Flask application" --agent-context "python"
-```
-
-### Executing Multiple Commands
-
-Create a JSON file with your commands (see `sample_commands.json` for example):
-
-```bash
-python create_repl.py --commands-file sample_commands.json
+python create_repl.py --title "My New Repl" --language python --private --username "your_username" --password "your_password"
 ```
 
 ## Command-line Arguments
@@ -46,37 +29,22 @@ python create_repl.py --commands-file sample_commands.json
 - `--title`: Title of the new Repl
 - `--language`: Programming language for the Repl
 - `--private`: Make the Repl private (optional)
-- `--token`: Replit API token (optional, can use REPLIT_API_TOKEN env var)
-- `--agent-command`: Single agent command to execute
-- `--agent-context`: Context for the agent command
-- `--commands-file`: JSON file containing multiple commands to execute
+- `--username`: Your Replit username (optional, will prompt if not provided)
+- `--password`: Your Replit password (optional and not recommended, will prompt if not provided)
 
-## Example Commands File
+## Security Note
 
-```json
-[
-  {
-    "command": "Create a simple Flask application",
-    "context": "python"
-  },
-  {
-    "command": "Add a new route",
-    "context": "Add to the Flask application"
-  }
-]
-```
-
-## Environment Variables
-
-- `REPLIT_API_TOKEN`: Your Replit API token (can be set instead of using --token)
+- The script will prompt for your password securely without displaying it
+- We recommend using the interactive prompt rather than command-line arguments for credentials
+- Your credentials are only used to authenticate with Replit and are not stored
 
 ## Troubleshooting
 
 If you encounter any issues:
 
-1. Ensure your API token is valid and hasn't expired
+1. Ensure your Replit credentials are correct
 2. Check that you have the correct permissions for the operations you're trying to perform
 3. Verify your internet connection
-4. For any authentication issues, generate a new token at https://replit.com/account#tokens
+4. For any authentication issues, try logging in to Replit website first
 
 For additional help, visit the Replit documentation or contact Replit support.
