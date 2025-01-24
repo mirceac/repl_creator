@@ -1,0 +1,18 @@
+{
+    "default_language": "python",
+    "templates": {
+        "flask_api": {
+            "path": "templates/sample_commands.json",
+            "description": "Basic Flask API template with routes for Hello World, current time, and error handling"
+        },
+        "python_basic": {
+            "path": "templates/basic_python.json",
+            "description": "Simple Python script template with Hello World"
+        }
+    },
+    "default_privacy": true,
+    "team_id": null,
+    "create_remote": false,
+    "config_version": "1.0.0",
+    "last_updated": "2025-01-24T00:00:00Z"
+}

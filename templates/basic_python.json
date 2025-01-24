@@ -1,0 +1,14 @@
+[
+  {
+    "command": "Create a basic Python script with main function",
+    "context": "python"
+  },
+  {
+    "command": "Add command line argument parsing",
+    "context": "Add argument parsing to the Python script"
+  },
+  {
+    "command": "Add basic logging configuration",
+    "context": "Add logging functionality to the Python script"
+  }
+]

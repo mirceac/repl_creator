@@ -50,11 +50,20 @@ class ReplConfig:
             if self.config_path.exists():
                 with open(self.config_path, 'r') as f:
                     config = json.load(f)
+                    print(f"\nLoading configuration from: {self.config_path}")
+                    if 'templates' in config:
+                        print(f"Found {len(config['templates'])} templates")
                 ConfigValidator.validate_config(config)
                 return config
+            print(f"\nConfiguration file not found at: {self.config_path}")
+            print("Using default configuration")
             return self.get_default_config()
         except json.JSONDecodeError as e:
+            print(f"Error parsing configuration file: {e}")
             raise ConfigurationError(f"Invalid JSON in config file: {e}", str(self.config_path))
+        except Exception as e:
+            print(f"Error loading configuration: {e}")
+            raise ConfigurationError(f"Failed to load config: {e}", str(self.config_path))
 
     def save(self, config: Dict[str, Any]) -> None:
         """Save configuration to file"""
@@ -253,12 +262,25 @@ class ReplitAPI:
             raise ValueError(f"API request failed: {str(e)}")
 
 
+
 class ReplWizard:
     """Interactive wizard for Repl configuration"""
 
     def __init__(self, config_manager: ReplConfig):
         self.config_manager = config_manager
-        self.config = config_manager.load()
+        try:
+            self.config = config_manager.load()
+            # Validate required configuration sections
+            if not isinstance(self.config.get('templates'), dict):
+                print("Warning: No templates section found in configuration")
+                self.config['templates'] = {}
+        except Exception as e:
+            print(f"Error loading configuration: {str(e)}")
+            self.config = {
+                'templates': {},
+                'default_privacy': False,
+                'create_remote': False
+            }
 
     def start_wizard(self) -> Dict[str, Any]:
         """Start the interactive configuration wizard"""
@@ -275,21 +297,38 @@ class ReplWizard:
                 choices=["python", "nodejs"],
                 default="python"
             )
-            if not language:
-                language = "python"  # Fallback to default
 
             is_private = self._prompt_boolean("Make Repl private?", default=self.config.get("default_privacy", False))
 
-            # Template selection
-            templates = self.config.get("templates", {})
+            print("\nAvailable templates:")
+            templates = self.config.get('templates', {})
             template_file = None
+
             if templates:
-                print("\nAvailable templates:")
                 for name, details in templates.items():
-                    print(f"- {name}: {details.get('description', 'No description')}")
-                template_name = self._prompt_string("Enter template name (or leave empty to skip)", required=False)
-                if template_name:
-                    template_file = templates.get(template_name, {}).get("path")
+                    desc = details.get('description', 'No description available')
+                    print(f"- {name}: {desc}")
+                print("")  # Add spacing for better readability
+
+                template_choices = list(templates.keys()) + ["No template"]
+                choice = self._prompt_choice(
+                    "Select a template",
+                    choices=template_choices,
+                    default="No template"
+                )
+
+                if choice != "No template":
+                    template_details = templates.get(choice, {})
+                    template_path = template_details.get('path')
+                    if template_path and os.path.exists(template_path):
+                        template_file = template_path
+                        print(f"\nSelected template: {choice}")
+                        print(f"Template path: {template_path}")
+                    else:
+                        print(f"\nWarning: Template file not found at {template_path}")
+                        print("Continuing without template.")
+            else:
+                print("No templates available.\n")
 
             create_remote = self._prompt_boolean(
                 "Create Repl on Replit.com? (requires API token)",
@@ -303,6 +342,7 @@ class ReplWizard:
                 "template": template_file,
                 "create_remote": create_remote
             }
+
         except (EOFError, KeyboardInterrupt):
             print("\nWizard cancelled. Using default values.")
             return {
@@ -391,7 +431,13 @@ class ReplCreator:
                  config_file: str = "repl_creator_config.json",
                  custom_config_path: Optional[str] = None):
         self.config_dir = Path(config_dir)
-        self.config_file = self.config_dir / config_file if not custom_config_path else Path(custom_config_path)
+        # If custom_config_path is not provided, look for config file in root directory first
+        if custom_config_path:
+            self.config_file = Path(custom_config_path)
+        else:
+            root_config = Path(config_file)
+            self.config_file = root_config if root_config.exists() else self.config_dir / config_file
+
         self.api = ReplitAPI()
 
         # Create config directory if it doesn't exist
@@ -429,6 +475,7 @@ class ReplCreator:
 
         # Create local configuration
         config = {
+            "title": title,  # Store the title in config
             "run": "",
             "language": language,
             "entrypoint": "",
@@ -581,15 +628,28 @@ class ReplCreator:
     def create_from_wizard(self) -> Dict[str, Any]:
         """Create a new Repl using the interactive wizard"""
         wizard = ReplWizard(self.config_manager)
-        config = wizard.start_wizard()
+        try:
+            wizard_config = wizard.start_wizard()
 
-        return self.create_repl(
-            title=config["title"],
-            language=config["language"],
-            is_private=config["is_private"],
-            template_file=config["template"],
-            create_remote=config["create_remote"]
-        )
+            # Validate required fields
+            if not wizard_config.get("title"):
+                raise ConfigurationError("Repl title is required")
+            if not wizard_config.get("language"):
+                raise ConfigurationError("Programming language is required")
+
+            # Create Repl with wizard configuration
+            config = self.create_repl(
+                title=wizard_config["title"],
+                language=wizard_config["language"],
+                is_private=wizard_config.get("is_private", False),
+                template_file=wizard_config.get("template"),
+                create_remote=wizard_config.get("create_remote", False)
+            )
+
+            return config
+        except Exception as e:
+            print(f"\nError creating Repl: {str(e)}")
+            raise
 
     def create_from_local_config(self, config_file_path: str) -> Dict[str, Any]:
         """Create a Repl from a local configuration file"""
@@ -673,19 +733,22 @@ def main():
         elif args.from_config:
             config = creator.create_from_local_config(args.from_config)
             print("\nRepl created from local configuration!")
-            print(f"Title: {config['title']}")
-            print(f"Language: {config['language']}")
-            print(f"Entry point: {config['entrypoint']}")
+            print(f"Title: {config.get('title', 'Unknown')}")
+            print(f"Language: {config.get('language', 'Unknown')}")
+            print(f"Entry point: {config.get('entrypoint', 'Unknown')}")
             if "remote" in config:
                 print(f"Remote URL: {config['remote']['url']}")
         elif args.wizard:
             config = creator.create_from_wizard()
             print("\nRepl created successfully through wizard!")
-            print(f"Title: {config['title']}")
-            print(f"Language: {config['language']}")
-            print(f"Entry point: {config['entrypoint']}")
+            print(f"Title: {config.get('title', 'MyRepl')}")
+            print(f"Language: {config.get('language', 'Unknown')}")
+            print(f"Entry point: {config.get('entrypoint', 'Unknown')}")
             if "remote" in config:
                 print(f"Remote URL: {config['remote']['url']}")
+            if config.get("template"):
+                print(f"Template: {config['template']}")
+
         elif args.bulk_config:
             results = creator.bulk_create_repls(args.bulk_config)
             print("\nBulk creation results:")
@@ -706,10 +769,12 @@ def main():
 
             print("\nRepl created successfully!")
             print(f"Title: {args.title}")
-            print(f"Language: {args.language}")
-            print(f"Entry point: {config['entrypoint']}")
+            print(f"Language: {config.get('language', 'Unknown')}")
+            print(f"Entry point: {config.get('entrypoint', 'Unknown')}")
             if "remote" in config:
                 print(f"Remote URL: {config['remote']['url']}")
+            if config.get("template"):
+                print(f"Template: {config['template']}")
         else:
             parser.print_help()
             sys.exit(1)
