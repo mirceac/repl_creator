@@ -1,0 +1,14 @@
+[
+  {
+    "command": "Create a simple Flask application that displays Hello World",
+    "context": "python"
+  },
+  {
+    "command": "Add a new route that returns current time",
+    "context": "Add to the Flask application"
+  },
+  {
+    "command": "Add error handling for invalid routes",
+    "context": "Enhance the Flask application with proper error handling"
+  }
+]
