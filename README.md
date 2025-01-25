@@ -14,8 +14,11 @@ For remote operations (creating Repls on Replit.com), you need to authenticate:
 1. Go to https://replit.com/account/api
    - Note: If you don't see an API section, make sure you're logged in
    - The API section might be under development or restricted
-2. For now, remote operations are limited to local-only mode
-3. We're actively updating our API integration to match Replit's latest authentication methods
+2. Copy your API token
+3. Create a `.env` file in the project root (copy from `.env.example`)
+4. Add your token: `REPLIT_TOKEN=your_token_here`
+
+Note: You can also set the token as an environment variable directly.
 
 ## Usage
 

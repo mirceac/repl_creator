@@ -9,6 +9,7 @@ from typing import Dict, Any, List, Optional, Union, Tuple
 from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime
+from dotenv import load_dotenv
 
 @dataclass
 class ConfigurationError(Exception):
@@ -94,6 +95,9 @@ class ReplitAPI:
     API_URL = "https://replit.com/api/v1"
 
     def __init__(self, token: Optional[str] = None):
+        # Load environment variables from .env file if it exists
+        load_dotenv()
+
         self.token = token or os.environ.get('REPLIT_TOKEN')
         self._is_remote_enabled = bool(self.token)
 
@@ -107,6 +111,9 @@ class ReplitAPI:
             print("Replit's API authentication system is being updated.")
             print("Currently, all operations will run in local-only mode.")
             print("We're actively working to support the latest authentication methods.")
+            print("\nTo enable remote features:")
+            print("1. Create a .env file in the project root")
+            print("2. Add your Replit token: REPLIT_TOKEN=your_token_here")
             print("\nAvailable Features:")
             print("-----------------")
             print("✓ Local Repl configuration creation")
@@ -260,7 +267,6 @@ class ReplitAPI:
             )
         except requests.exceptions.RequestException as e:
             raise ValueError(f"API request failed: {str(e)}")
-
 
 
 class ReplWizard:
@@ -549,25 +555,93 @@ class ReplCreator:
 
     def bulk_create_repls(self, config_file: str) -> List[Dict[str, Any]]:
         """Create multiple Repls from a configuration file"""
-        with open(config_file, 'r') as f:
-            configs = json.load(f)
+        try:
+            with open(config_file, 'r') as f:
+                bulk_config = json.load(f)
 
-        results = []
-        for repl_config in configs:
-            try:
-                config = self.create_repl(
-                    title=repl_config["title"],
-                    language=repl_config.get("language", self.config["default_language"]),
-                    is_private=repl_config.get("is_private", self.config["default_privacy"]),
-                    template_file=repl_config.get("template"),
-                    team_id=repl_config.get("team_id"),
-                    create_remote=repl_config.get("create_remote")
-                )
-                results.append({"title": repl_config["title"], "status": "success", "config": config})
-            except Exception as e:
-                results.append({"title": repl_config["title"], "status": "error", "error": str(e)})
+            if not isinstance(bulk_config, dict) or 'repls' not in bulk_config:
+                raise ConfigurationError("Invalid bulk configuration format. Must contain 'repls' array.")
 
-        return results
+            results = []
+            default_settings = bulk_config.get('default_settings', {})
+
+            # Validate default settings
+            if default_settings:
+                if not isinstance(default_settings, dict):
+                    raise ConfigurationError("Invalid default_settings format. Must be a dictionary.")
+
+                # Ensure default settings have valid values
+                if 'language' in default_settings and default_settings['language'] not in ['python', 'nodejs']:
+                    raise ConfigurationError("Invalid default language. Must be 'python' or 'nodejs'.")
+                if 'is_private' in default_settings and not isinstance(default_settings['is_private'], bool):
+                    raise ConfigurationError("Invalid default is_private setting. Must be boolean.")
+
+            total_repls = len(bulk_config['repls'])
+            print(f"\nStarting bulk creation of {total_repls} Repls...")
+
+            for idx, repl_config in enumerate(bulk_config['repls'], 1):
+                try:
+                    if not isinstance(repl_config, dict):
+                        raise ConfigurationError("Invalid Repl configuration format")
+
+                    # Merge default settings with individual Repl config
+                    title = repl_config.get('title')
+                    if not title:
+                        raise ConfigurationError("Repl title is required")
+
+                    language = repl_config.get('language') or default_settings.get('language', self.config.get('default_language', 'python'))
+                    is_private = repl_config.get('is_private', default_settings.get('is_private', self.config.get('default_privacy', False)))
+                    template_file = repl_config.get('template') or default_settings.get('template')
+                    team_id = repl_config.get('team_id') or default_settings.get('team_id')
+                    create_remote = repl_config.get('create_remote', default_settings.get('create_remote', False))
+
+                    print(f"\nCreating Repl {idx}/{total_repls}: {title}")
+
+                    config = self.create_repl(
+                        title=title,
+                        language=language,
+                        is_private=is_private,
+                        template_file=template_file,
+                        team_id=team_id,
+                        create_remote=create_remote
+                    )
+
+                    results.append({
+                        "title": title,
+                        "status": "success",
+                        "config": config,
+                        "language": language,
+                        "is_private": is_private
+                    })
+
+                except Exception as e:
+                    print(f"Error creating Repl '{title}': {str(e)}")
+                    results.append({
+                        "title": title,
+                        "status": "error",
+                        "error": str(e),
+                        "language": language
+                    })
+
+            # Print summary
+            successful = len([r for r in results if r['status'] == 'success'])
+            failed = len(results) - successful
+            print(f"\nBulk creation completed:")
+            print(f"✓ Successfully created: {successful}")
+            print(f"× Failed: {failed}")
+
+            if failed > 0:
+                print("\nFailed Repls:")
+                for result in results:
+                    if result['status'] == 'error':
+                        print(f"- {result['title']}: {result['error']}")
+
+            return results
+
+        except json.JSONDecodeError as e:
+            raise ConfigurationError(f"Invalid JSON in bulk configuration file: {str(e)}")
+        except Exception as e:
+            raise ConfigurationError(f"Error processing bulk configuration: {str(e)}")
 
     def _create_entry_point(self, entrypoint: str):
         """Create a basic entry point file"""
@@ -730,6 +804,19 @@ def main():
                 if config['template']:
                     print(f"Template: {config['template']}")
                 print("-----------------------------")
+        elif args.bulk_config:
+            results = creator.bulk_create_repls(args.bulk_config)
+            successful = len([r for r in results if r['status'] == 'success'])
+
+            if successful > 0:
+                print("\nSuccessfully created Repls:")
+                for result in results:
+                    if result['status'] == 'success':
+                        print(f"\nTitle: {result['title']}")
+                        print(f"Language: {result['language']}")
+                        print(f"Private: {result['is_private']}")
+                        if 'remote' in result['config']:
+                            print(f"Remote URL: {result['config']['remote']['url']}")
         elif args.from_config:
             config = creator.create_from_local_config(args.from_config)
             print("\nRepl created from local configuration!")
@@ -748,40 +835,26 @@ def main():
                 print(f"Remote URL: {config['remote']['url']}")
             if config.get("template"):
                 print(f"Template: {config['template']}")
-
-        elif args.bulk_config:
-            results = creator.bulk_create_repls(args.bulk_config)
-            print("\nBulk creation results:")
-            for result in results:
-                status = "✓" if result["status"] == "success" else "✗"
-                print(f"{status} {result['title']}")
-                if result["status"] == "error":
-                    print(f"  Error: {result['error']}")
-        elif args.title:
+        elif args.title and args.language:
             config = creator.create_repl(
-                args.title, 
-                args.language, 
-                args.private, 
-                args.template,
-                args.team_id,
-                args.create_remote
+                title=args.title,
+                language=args.language,
+                is_private=args.private,
+                template_file=args.template,
+                team_id=args.team_id,
+                create_remote=args.create_remote
             )
-
             print("\nRepl created successfully!")
             print(f"Title: {args.title}")
-            print(f"Language: {config.get('language', 'Unknown')}")
+            print(f"Language: {args.language}")
             print(f"Entry point: {config.get('entrypoint', 'Unknown')}")
             if "remote" in config:
                 print(f"Remote URL: {config['remote']['url']}")
-            if config.get("template"):
-                print(f"Template: {config['template']}")
         else:
             parser.print_help()
-            sys.exit(1)
-
     except Exception as e:
-        print(f"An error occurred: {str(e)}")
+        print(f"\nError: {str(e)}")
         sys.exit(1)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
